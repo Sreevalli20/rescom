@@ -1,11 +1,10 @@
 ﻿{
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "services": [
+  "rewrites": [
     {
-      "type": "web",
-      "buildCommand": "npm run build",
-      "outputDirectory": "dist"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
