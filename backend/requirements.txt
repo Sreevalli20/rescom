@@ -5,7 +5,7 @@ python-multipart==0.0.12
 
 # Database
 sqlalchemy==2.0.35
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.12
 
 # Pydantic and settings (using latest for Python 3.14 compatibility)
 pydantic>=2.10.0
