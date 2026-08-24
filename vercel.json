@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!assets|favicon|manifest).*)",
       "destination": "/index.html"
     }
   ]
