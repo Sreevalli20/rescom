@@ -21,7 +21,7 @@ import { mockService } from './mockService';
 class CallService {
   private useMockMode: boolean;
   private backendHealth: BackendHealth;
-  private pollInterval: NodeJS.Timeout | null = null;
+  private pollInterval: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     // Check environment variable VITE_USE_MOCKS (defaults to true if unset or set to 'true')
