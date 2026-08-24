@@ -1,0 +1,6 @@
+{
+  "name": "AI Voice Sales Agent",
+  "description": "Production-ready web dashboard for monitoring outbound AI voice e-commerce sales calls with live transcripts, real-time qualification, multi-lingual detection (Telugu, Hindi, English), backend action logging, and callback scheduling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

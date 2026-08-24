@@ -1,0 +1,65 @@
+# Render deployment configuration for AI Voice Sales Agent Backend
+# https://render.com/docs/yaml-spec
+
+services:
+  # Web service
+  - type: web
+    name: ai-voice-sales-agent-backend
+    runtime: python
+    plan: free
+    region: singapore
+    
+    # Build configuration
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    
+    # Environment variables (set these in Render dashboard)
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14
+      - key: FRONTEND_URL
+        sync: false  # Set manually in Render dashboard
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sales-agent-db
+          property: connectionString
+      - key: EXOTEL_ACCOUNT_SID
+        sync: false
+      - key: EXOTEL_API_KEY
+        sync: false
+      - key: EXOTEL_API_TOKEN
+        sync: false
+      - key: EXOTEL_PHONE_NUMBER
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+      - key: TWILIO_WHATSAPP_TO
+        sync: false
+      - key: WHATSAPP_PROVIDER
+        value: twilio
+      - key: CONTACT_MOBILE
+        sync: false
+      - key: RESUME_URL
+        sync: false
+      - key: ARCHITECTURE_IMAGE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: gpt-4o-mini
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: TIMEZONE
+        value: Asia/Kolkata
+
+# PostgreSQL database
+databases:
+  - name: sales-agent-db
+    databaseName: sales_agent
+    user: sales_agent_user
+    plan: free
+    region: singapore
