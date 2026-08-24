@@ -18,17 +18,18 @@ class ExotelService:
         self.account_sid = settings.EXOTEL_ACCOUNT_SID
         self.api_key = settings.EXOTEL_API_KEY
         self.api_token = settings.EXOTEL_API_TOKEN
-        self.subdomain = settings.EXOTEL_SUBDOMAIN
         self.region = settings.EXOTEL_REGION.lower()
         self.phone_number = settings.EXOTEL_PHONE_NUMBER
+        self.flow_id = settings.EXOTEL_FLOW_ID
         
-        # Build base URL based on region
+        # Build base URL based on region (Exotel API endpoints)
         if self.region == "singapore":
-            self.base_url = f"https://{self.subdomain}"
+            self.base_url = "https://api.exotel.com"
         elif self.region == "india":
-            self.base_url = f"https://{self.subdomain}"
+            self.base_url = "https://api.in.exotel.com"
         else:
-            self.base_url = f"https://{self.subdomain}"
+            # Default to Singapore if region not specified
+            self.base_url = "https://api.exotel.com"
         
         self.client = httpx.AsyncClient(timeout=30.0)
     
@@ -47,12 +48,12 @@ class ExotelService:
         flow_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Initiate an outbound call through Exotel.
+        Initiate an outbound call through Exotel and connect to voice flow.
         
         Args:
             phone_number: Customer phone number (with country code)
             caller_id: Exotel phone number to use as caller ID
-            flow_id: Exotel flow ID for call flow
+            flow_id: Exotel flow ID for call flow (optional, uses settings if not provided)
             
         Returns:
             Dictionary with call details including call SID
@@ -66,6 +67,18 @@ class ExotelService:
                 "message": "Mock mode - Exotel credentials not configured"
             }
         
+        # Use provided flow_id or fall back to settings
+        actual_flow_id = flow_id or self.flow_id
+        
+        if not actual_flow_id:
+            logger.warning("Exotel Flow ID not configured, call will not connect to AI voice flow")
+            return {
+                "success": False,
+                "call_sid": None,
+                "status": "failed",
+                "message": "Exotel Flow ID not configured - cannot connect to voice AI flow"
+            }
+        
         try:
             url = f"{self.base_url}/v1/Accounts/{self.account_sid}/Calls/connect.json"
             
@@ -73,17 +86,19 @@ class ExotelService:
             backend_url = settings.BACKEND_URL.rstrip('/')
             status_callback_url = f"{backend_url}/api/webhooks/exotel/call-status"
             
+            # Build flow URL for Exotel voice applet
+            flow_url = f"http://my.exotel.com/{self.account_sid}/exoml/start_voice/{actual_flow_id}"
+            
             params = {
-                "From": caller_id or self.phone_number,
-                "To": phone_number,
+                "From": phone_number,
                 "CallerId": caller_id or self.phone_number,
-                "Url": "",  # Add App URL if using Exotel Flow
-                "StatusCallback": status_callback_url,  # Webhook URL for status updates
-                "StatusCallbackEvents": "ringing,answered,completed",
+                "Url": flow_url,
+                "StatusCallback": status_callback_url,
+                "StatusCallbackEvents": "terminal,answered",
+                "CallType": "trans"
             }
             
-            if flow_id:
-                params["FlowId"] = flow_id
+            logger.info(f"Initiating Exotel call to {phone_number} with flow {actual_flow_id}")
             
             response = await self.client.post(
                 url,
@@ -93,13 +108,15 @@ class ExotelService:
             response.raise_for_status()
             
             data = response.json()
+            call_data = data.get("Call", data)
+            
             return {
                 "success": True,
-                "call_sid": data.get("Sid"),
-                "status": data.get("Status", "calling"),
-                "direction": data.get("Direction"),
-                "from_number": data.get("From"),
-                "to_number": data.get("To"),
+                "call_sid": call_data.get("Sid"),
+                "status": call_data.get("Status", "calling"),
+                "direction": call_data.get("Direction"),
+                "from_number": call_data.get("From"),
+                "to_number": call_data.get("To"),
             }
             
         except httpx.HTTPError as e:

@@ -93,7 +93,7 @@ async def start_call(
     )
     db.add(callback)
     
-    # Log action
+    # Log action with call_sid for webhook mapping
     action = Action(
         id=f"act_{uuid.uuid4().hex[:12]}",
         call_id=call_id,
@@ -102,7 +102,10 @@ async def start_call(
         timestamp=datetime.utcnow(),
         title="Exotel Call Initiated",
         description=f"Call initiated to {payload.phoneNumber}",
-        payload_snippet=json.dumps({"phone": payload.phoneNumber})
+        payload_snippet=json.dumps({
+            "phone": payload.phoneNumber,
+            "call_sid": exotel_result.get("call_sid")
+        })
     )
     db.add(action)
     

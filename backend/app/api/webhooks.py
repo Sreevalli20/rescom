@@ -39,15 +39,11 @@ async def exotel_call_status(
     
     try:
         data = await request.json()
-        call_sid = data.get("CallSid")
+        call_sid = data.get("CallSid") or data.get("Sid")
         status = data.get("Status", "").lower()
         
         if not call_sid:
             raise HTTPException(status_code=400, detail="Missing CallSid")
-        
-        # Find call by Exotel SID (stored in action metadata or notes)
-        # For now, we'll need to map call_sid to our internal call_id
-        # This is a simplified implementation
         
         logger.info(f"Received call status webhook: CallSid={call_sid}, Status={status}")
         
@@ -58,13 +54,59 @@ async def exotel_call_status(
             "completed": "completed",
             "failed": "failed",
             "busy": "failed",
-            "no-answer": "failed"
+            "no-answer": "failed",
+            "canceled": "failed"
         }
         
         new_status = status_mapping.get(status, status)
         
-        # Log the webhook event
-        # In production, you would update the actual call record here
+        # Find the call by searching action metadata for the call_sid
+        from app.models.action import CallAction as Action
+        action = db.query(Action).filter(
+            Action.payload_snippet.like(f"%{call_sid}%")
+        ).order_by(Action.timestamp.desc()).first()
+        
+        if action:
+            call_id = action.call_id
+            call = db.query(Call).filter(Call.id == call_id).first()
+            
+            if call:
+                # Update call status
+                old_status = call.status
+                call.status = new_status
+                
+                # Update end time and duration if call is completed
+                if new_status in ["completed", "failed"]:
+                    call.ended_at = datetime.utcnow()
+                    if call.started_at:
+                        call.duration_seconds = int((call.ended_at - call.started_at).total_seconds())
+                
+                db.commit()
+                
+                # Log the status update
+                status_action = Action(
+                    id=f"act_{uuid.uuid4().hex[:12]}",
+                    call_id=call_id,
+                    action_type="status_update",
+                    status="completed",
+                    timestamp=datetime.utcnow(),
+                    title=f"Call Status: {status}",
+                    description=f"Status changed from {old_status} to {new_status}",
+                    payload_snippet=json.dumps({
+                        "call_sid": call_sid,
+                        "old_status": old_status,
+                        "new_status": new_status,
+                        "raw_status": status
+                    })
+                )
+                db.add(status_action)
+                db.commit()
+                
+                logger.info(f"Updated call {call_id} status to {new_status}")
+            else:
+                logger.warning(f"Call {call_id} not found for call_sid {call_sid}")
+        else:
+            logger.warning(f"No action found with call_sid {call_sid}")
         
         return {"status": "received", "call_sid": call_sid, "mapped_status": new_status}
         

@@ -31,9 +31,10 @@ class Settings(BaseSettings):
     EXOTEL_ACCOUNT_SID: str = ""
     EXOTEL_API_KEY: str = ""
     EXOTEL_API_TOKEN: str = ""
-    EXOTEL_SUBDOMAIN: str = "api.exotel.com"
-    EXOTEL_REGION: str = "Singapore"
+    EXOTEL_SUBDOMAIN: str = ""  # e.g., "api.exotel.com" for Singapore, "api.in.exotel.com" for India
+    EXOTEL_REGION: str = "singapore"  # Options: "singapore" or "india"
     EXOTEL_PHONE_NUMBER: str = ""
+    EXOTEL_FLOW_ID: str = ""  # Exotel App/Flow ID for voice AI integration
     
     # WhatsApp Configuration
     WHATSAPP_PROVIDER: str = "mock"  # Options: mock, twilio, messagebird, gupshup
