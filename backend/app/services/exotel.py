@@ -69,12 +69,16 @@ class ExotelService:
         try:
             url = f"{self.base_url}/v1/Accounts/{self.account_sid}/Calls/connect.json"
             
+            # Generate webhook URLs based on backend URL
+            backend_url = settings.BACKEND_URL.rstrip('/')
+            status_callback_url = f"{backend_url}/api/webhooks/exotel/call-status"
+            
             params = {
                 "From": caller_id or self.phone_number,
                 "To": phone_number,
                 "CallerId": caller_id or self.phone_number,
                 "Url": "",  # Add App URL if using Exotel Flow
-                "StatusCallback": "",  # Add webhook URL for status updates
+                "StatusCallback": status_callback_url,  # Webhook URL for status updates
                 "StatusCallbackEvents": "ringing,answered,completed",
             }
             
