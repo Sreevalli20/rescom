@@ -50,7 +50,7 @@ export const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({
         await apiClient.checkHealth();
         setTestResult({
           success: true,
-          message: `Backend Connected! GET /api/health responded OK at ${apiUrl}`,
+          message: `Backend Connected! GET /health responded OK at ${apiUrl}`,
         });
         const h = await callService.checkBackendHealth();
         onHealthUpdated(h);
