@@ -22,6 +22,17 @@ class ExotelService:
         self.phone_number = settings.EXOTEL_PHONE_NUMBER
         self.flow_id = settings.EXOTEL_FLOW_ID
         
+        # Log diagnostic information (no actual values)
+        logger.info("=== EXOTEL CONFIGURATION DIAGNOSTIC ===")
+        logger.info(f"EXOTEL_ACCOUNT_SID: {'PRESENT' if self.account_sid else 'MISSING'}")
+        logger.info(f"EXOTEL_API_KEY: {'PRESENT' if self.api_key else 'MISSING'}")
+        logger.info(f"EXOTEL_API_TOKEN: {'PRESENT' if self.api_token else 'MISSING'}")
+        logger.info(f"EXOTEL_PHONE_NUMBER: {'PRESENT' if self.phone_number else 'MISSING'}")
+        logger.info(f"EXOTEL_FLOW_ID: {'PRESENT' if self.flow_id else 'MISSING'}")
+        logger.info(f"EXOTEL_REGION: {'PRESENT' if settings.EXOTEL_REGION else 'MISSING'} (value: {settings.EXOTEL_REGION if settings.EXOTEL_REGION else 'NOT SET'})")
+        logger.info(f"BACKEND_URL: {'PRESENT' if settings.BACKEND_URL else 'MISSING'} (value: {settings.BACKEND_URL if settings.BACKEND_URL else 'NOT SET'})")
+        logger.info("=== END EXOTEL DIAGNOSTIC ===")
+        
         # Build base URL based on region (Exotel API endpoints)
         if self.region == "singapore":
             self.base_url = "https://api.exotel.com"
@@ -39,7 +50,21 @@ class ExotelService:
     
     def _get_auth(self) -> tuple:
         """Get HTTP basic authentication credentials."""
+        if not self.api_key or not self.api_token:
+            logger.error("API_KEY or API_TOKEN is missing - cannot authenticate")
         return (self.api_key, self.api_token)
+    
+    def _get_auth_headers(self) -> dict:
+        """Get Authorization header with Basic Auth."""
+        import base64
+        if not self.api_key or not self.api_token:
+            return {}
+        # Strip any whitespace from credentials
+        api_key_clean = self.api_key.strip()
+        api_token_clean = self.api_token.strip()
+        credentials = f"{api_key_clean}:{api_token_clean}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        return {"Authorization": f"Basic {encoded}"}
     
     async def initiate_call(
         self,
@@ -58,13 +83,22 @@ class ExotelService:
         Returns:
             Dictionary with call details including call SID
         """
-        if not self.account_sid or not self.api_key or not self.api_token:
-            logger.warning("Exotel credentials not configured, returning mock call SID")
+        # Check for missing credentials with detailed logging
+        missing_creds = []
+        if not self.account_sid:
+            missing_creds.append("EXOTEL_ACCOUNT_SID")
+        if not self.api_key:
+            missing_creds.append("EXOTEL_API_KEY")
+        if not self.api_token:
+            missing_creds.append("EXOTEL_API_TOKEN")
+        
+        if missing_creds:
+            logger.warning(f"Exotel credentials not configured. Missing: {', '.join(missing_creds)}. Returning mock call SID.")
             return {
                 "success": True,
                 "call_sid": f"MOCK-{self._generate_mock_sid()}",
                 "status": "calling",
-                "message": "Mock mode - Exotel credentials not configured"
+                "message": f"Mock mode - Missing Exotel credentials: {', '.join(missing_creds)}"
             }
         
         # Use provided flow_id or fall back to settings
@@ -83,8 +117,12 @@ class ExotelService:
             url = f"{self.base_url}/v1/Accounts/{self.account_sid}/Calls/connect.json"
             
             # Generate webhook URLs based on backend URL
+            # Ensure we use the production URL, never localhost in production
             backend_url = settings.BACKEND_URL.rstrip('/')
+            if backend_url.startswith("http://localhost") or backend_url.startswith("http://127.0.0.1"):
+                logger.warning(f"BACKEND_URL is set to localhost ({backend_url}) - this will not work for webhooks in production")
             status_callback_url = f"{backend_url}/api/webhooks/exotel/call-status"
+            logger.info(f"StatusCallback URL: {status_callback_url}")
             
             # Build flow URL for Exotel voice applet
             flow_url = f"http://my.exotel.com/{self.account_sid}/exoml/start_voice/{actual_flow_id}"
@@ -99,12 +137,40 @@ class ExotelService:
             }
             
             logger.info(f"Initiating Exotel call to {phone_number} with flow {actual_flow_id}")
+            logger.info(f"Exotel API URL: {url}")
+            logger.info(f"Using Account SID: {self.account_sid}")
+            logger.info(f"Auth configured: API_KEY={'SET' if self.api_key else 'NOT SET'}, API_TOKEN={'SET' if self.api_token else 'NOT SET'}")
+            logger.info(f"API_KEY length: {len(self.api_key) if self.api_key else 0}")
+            logger.info(f"API_TOKEN length: {len(self.api_token) if self.api_token else 0}")
+            
+            # Verify credentials before making request
+            if not self.api_key or not self.api_token:
+                logger.error("Cannot authenticate: API_KEY or API_TOKEN is missing")
+                return {
+                    "success": False,
+                    "call_sid": None,
+                    "status": "failed",
+                    "message": "Exotel credentials not configured - API_KEY and API_TOKEN are required"
+                }
+            
+            # Use manual Authorization header instead of httpx auth parameter
+            # to ensure correct Basic Auth format
+            headers = self._get_auth_headers()
+            logger.info(f"Using manual Authorization header (length: {len(headers.get('Authorization', ''))})")
             
             response = await self.client.post(
                 url,
-                auth=self._get_auth(),
+                headers=headers,
                 params=params
             )
+            
+            # Log response status for debugging
+            logger.info(f"Exotel API response status: {response.status_code}")
+            if response.status_code == 401:
+                logger.error("Exotel API returned 401 Unauthorized - Check API_KEY and API_TOKEN credentials")
+                logger.error(f"Account SID being used: {self.account_sid}")
+                logger.error(f"API endpoint: {self.base_url}")
+            
             response.raise_for_status()
             
             data = response.json()
@@ -150,7 +216,8 @@ class ExotelService:
         try:
             url = f"{self.base_url}/v1/Accounts/{self.account_sid}/Calls/{call_sid}.json"
             
-            response = await self.client.get(url, auth=self._get_auth())
+            headers = self._get_auth_headers()
+            response = await self.client.get(url, headers=headers)
             response.raise_for_status()
             
             data = response.json()
@@ -189,9 +256,10 @@ class ExotelService:
         try:
             url = f"{self.base_url}/v1/Accounts/{self.account_sid}/Calls/{call_sid}.json"
             
+            headers = self._get_auth_headers()
             response = await self.client.post(
                 url,
-                auth=self._get_auth(),
+                headers=headers,
                 params={"Status": "completed"}
             )
             response.raise_for_status()
@@ -233,6 +301,51 @@ class ExotelService:
         """Generate a mock call SID for development."""
         import uuid
         return str(uuid.uuid4())[:12].upper()
+    
+    async def test_authentication(self) -> Dict[str, Any]:
+        """
+        Test authentication against Exotel API directly.
+        This is a diagnostic method to verify credentials are valid.
+        """
+        if not self.account_sid or not self.api_key or not self.api_token:
+            return {
+                "success": False,
+                "error": "Missing credentials",
+                "account_sid_present": bool(self.account_sid),
+                "api_key_present": bool(self.api_key),
+                "api_token_present": bool(self.api_token)
+            }
+        
+        try:
+            # Test with a simple GET request to Calls endpoint
+            url = f"{self.base_url}/v1/Accounts/{self.account_sid}/Calls.json"
+            headers = self._get_auth_headers()
+            
+            logger.info(f"Testing authentication against: {url}")
+            logger.info(f"Account SID: {self.account_sid}")
+            logger.info(f"API_KEY length: {len(self.api_key)}")
+            logger.info(f"API_TOKEN length: {len(self.api_token)}")
+            
+            response = await self.client.get(url, headers=headers)
+            
+            logger.info(f"Authentication test response status: {response.status_code}")
+            
+            return {
+                "success": response.status_code == 200,
+                "status_code": response.status_code,
+                "account_sid": self.account_sid,
+                "api_endpoint": self.base_url,
+                "response_body_preview": response.text[:200] if response.text else ""
+            }
+            
+        except httpx.HTTPError as e:
+            logger.error(f"Authentication test error: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "account_sid": self.account_sid,
+                "api_endpoint": self.base_url
+            }
 
 
 # Global Exotel service instance

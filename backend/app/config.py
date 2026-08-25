@@ -11,7 +11,12 @@ from pydantic import ConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
-    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra='ignore')
+    model_config = ConfigDict(
+        env_file=".env" if os.path.exists(".env") else None,
+        env_file_encoding="utf-8",
+        case_sensitive=True, 
+        extra='ignore'
+    )
     
     # Application
     APP_NAME: str = "AI Voice Sales Agent Backend"
@@ -22,7 +27,8 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     
     # Backend URL (for webhook generation)
-    BACKEND_URL: str = "http://localhost:8000"
+    # MUST be set to production URL in deployment (e.g., https://rescom.onrender.com)
+    BACKEND_URL: str = ""
     
     # Database (PostgreSQL on Render)
     DATABASE_URL: str = "sqlite:///./sales_agent.db"

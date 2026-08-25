@@ -33,6 +33,10 @@ services:
         sync: false
       - key: EXOTEL_PHONE_NUMBER
         sync: false
+      - key: EXOTEL_FLOW_ID
+        sync: false
+      - key: EXOTEL_REGION
+        value: india
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
