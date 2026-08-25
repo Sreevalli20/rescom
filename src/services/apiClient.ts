@@ -82,10 +82,10 @@ export class ApiClient {
 
   /**
    * Check backend health
-   * GET /api/health
+   * GET /health
    */
   async checkHealth(): Promise<{ status: string; timestamp?: string; version?: string }> {
-    return this.request<{ status: string; timestamp?: string; version?: string }>('/api/health');
+    return this.request<{ status: string; timestamp?: string; version?: string }>('/health');
   }
 
   /**
